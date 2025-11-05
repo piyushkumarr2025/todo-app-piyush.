@@ -1,9 +1,9 @@
-/* To‑Do Pro – Piyush | Priority, Categories, Sorting, Dark mode */
+/* same JS as v2 build with new keys and title already handled there */
 (function(){
   const $ = (s,ctx=document)=>ctx.querySelector(s);
   const $$ = (s,ctx=document)=>Array.from(ctx.querySelectorAll(s));
-  const STORAGE_KEY = "todo.piyush.pro.v1";
-  const THEME_KEY = "todo.theme";
+  const STORAGE_KEY = "todo.piyush.pro.v2"; // keeping the key name (no visible title impact)
+  const THEME_KEY = "todo.theme.v2";
 
   let state = load();
   let currentFilter = "all";
@@ -30,58 +30,42 @@
     themeToggle: $("#theme-toggle")
   };
 
-  // Theme
   initTheme();
   function initTheme(){
     const t = localStorage.getItem(THEME_KEY) || "dark";
     if(t === "light") document.documentElement.classList.add("light");
-    els.themeToggle.textContent = document.documentElement.classList.contains("light") ? "🌞" : "🌙";
+    updateThemeIcon();
     els.themeToggle.addEventListener("click", ()=>{
       document.documentElement.classList.toggle("light");
       const isLight = document.documentElement.classList.contains("light");
       localStorage.setItem(THEME_KEY, isLight ? "light":"dark");
-      els.themeToggle.textContent = isLight ? "🌞" : "🌙";
+      updateThemeIcon();
     });
   }
+  function updateThemeIcon(){
+    els.themeToggle.textContent = document.documentElement.classList.contains("light") ? "🌞" : "🌙";
+  }
 
-  // Storage
   function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   function load(){
-    try {
-      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if(!raw) return { tasks: [] };
-      // Migration for older versions if needed
-      raw.tasks = (raw.tasks||[]).map(t => ({
-        id: t.id || uid(),
-        title: t.title || "",
-        due: t.due || "",
-        completed: !!t.completed,
-        created: t.created || nowISO(),
-        priority: t.priority || "medium",
-        category: t.category || ""
-      }));
-      return raw;
-    } catch{ return { tasks: [] }; }
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { tasks: [] }; }
+    catch(e){ return { tasks: [] }; }
   }
   function uid(){ return Math.random().toString(36).slice(2,9) }
   function nowISO(){ return new Date().toISOString() }
-  function parseDate(s){
-    if(!s) return null;
-    return new Date(s.length===10 ? s+'T00:00:00' : s);
-  }
+  function parseDate(s){ if(!s) return null; return new Date(s.length===10?s+'T00:00:00':s); }
   function isOverdue(t){
     if(!t.due) return false;
     const d = parseDate(t.due);
-    const today = new Date();
-    // strip time from today
-    const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const now = new Date();
+    const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     return !t.completed && d < todayMid;
   }
   function isDueToday(t){
     if(!t.due) return false;
     const d = parseDate(t.due);
-    const today = new Date();
-    return d.getFullYear()===today.getFullYear() && d.getMonth()===today.getMonth() && d.getDate()===today.getDate();
+    const now = new Date();
+    return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
   }
 
   function counts(){
@@ -101,11 +85,10 @@
       if(currentFilter==="active" && t.completed) return false;
       if(currentFilter==="completed" && !t.completed) return false;
       if(currentFilter==="overdue" && !isOverdue(t)) return false;
-      if(q && !(t.title+" "+t.category).toLowerCase().includes(q)) return false;
+      if(q && !(t.title+" "+(t.category||"")).toLowerCase().includes(q)) return false;
       return true;
     });
 
-    // sort
     const mode = els.sortBy.value;
     const prioRank = {high:0, medium:1, low:2};
     items.sort((a,b)=>{
@@ -131,7 +114,8 @@
 
     $(".toggle", li).checked = task.completed;
     const badge = $(".priority-badge", li);
-    badge.textContent = (task.priority || "MED").slice(0,1).toUpperCase() + (task.priority==="high"?"IGH": task.priority==="low"?"OW":"ED");
+    const label = task.priority==="high"?"HIGH":task.priority==="low"?"LOW":"MED";
+    badge.textContent = label;
     badge.classList.remove("priority-high","priority-medium","priority-low");
     badge.classList.add(task.priority==="high"?"priority-high": task.priority==="low"?"priority-low":"priority-medium");
 
@@ -140,17 +124,15 @@
     $(".due", li).textContent = task.due ? `Due: ${new Date(task.due).toLocaleDateString()}` : "";
     $(".ts", li).textContent = `Added: ${new Date(task.created).toLocaleString()}`;
 
-    $(".toggle", li).addEventListener("change", ()=>toggle(task.id));
-    $(".delete", li).addEventListener("click", ()=>remove(task.id));
-    $(".edit", li).addEventListener("click", ()=>edit(task.id));
-    $(".task-title", li).addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ e.preventDefault(); edit(task.id); }});
-
+    $(".toggle", li).addEventListener("change", () => toggle(task.id));
+    $(".delete", li).addEventListener("click", () => remove(task.id));
+    $(".edit", li).addEventListener("click", () => edit(task.id));
+    $(".task-title", li).addEventListener("keydown", (e)=>{ if(e.key === "Enter"){ e.preventDefault(); edit(task.id); } });
     els.list.appendChild(li);
   }
 
-  // CRUD
   function add(title, due, priority, category){
-    state.tasks.push({ id: uid(), title: title.trim(), due: due||"", completed:false, created: nowISO(), priority: priority||"medium", category: category||"" });
+    state.tasks.push({ id: uid(), title: title.trim(), due: due || "", completed:false, created: nowISO(), priority: priority||"medium", category: category||"" });
     save(); render();
   }
   function toggle(id){
@@ -178,17 +160,12 @@
     save(); render();
   }
 
-  // Events
   els.form.addEventListener("submit", (e)=>{
     e.preventDefault();
     const title = els.title.value.trim();
     if(!title) return;
     add(title, els.date.value, els.prio.value, els.cat.value.trim());
-    els.title.value = "";
-    els.cat.value = "";
-    els.date.value = "";
-    els.prio.value = "medium";
-    els.title.focus();
+    els.title.value = ""; els.cat.value = ""; els.date.value = ""; els.prio.value = "medium";
   });
 
   els.clearCompleted.addEventListener("click", ()=>{
@@ -199,9 +176,9 @@
   els.exportBtn.addEventListener("click", ()=>{
     const blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "todo-pro-data.json"; a.click(); URL.revokeObjectURL(url);
+    const a = document.createElement("a"); a.href=url; a.download="todo-data-v2.json"; a.click(); URL.revokeObjectURL(url);
   });
+
   els.importBtn.addEventListener("click", ()=> els.importFile.click());
   els.importFile.addEventListener("change", (e)=>{
     const file = e.target.files[0]; if(!file) return;
@@ -211,7 +188,7 @@
         const data = JSON.parse(reader.result);
         if(!data.tasks) throw new Error("Invalid file");
         state = data; save(); render();
-      }catch{ alert("Import failed. Use an export JSON from this app."); }
+      }catch{ alert("Import failed. Use a valid JSON export."); }
     };
     reader.readAsText(file);
   });
@@ -226,6 +203,5 @@
   els.search.addEventListener("input", render);
   els.sortBy.addEventListener("change", render);
 
-  // Initial paint
   render();
 })();
